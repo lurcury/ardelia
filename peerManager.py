@@ -29,6 +29,7 @@
             * (addr, pubID) for now
         - in discovery(), connect to random peers, nearest neighbors, or other?
         - discovery!! 
+        - TODO: change packet format to [ctrl, *args] where *args can be (node={addr,id}, block={}, trans={}, commit={}, ...)
 """
 import time
 import random
@@ -186,7 +187,7 @@ class PeerManager(gevent.Greenlet):
         except KeyError:
             print("Missing sender public ID in hello packet!")
 
-        assert packet.control_code == "hello", "Control code for hello packet incorrect!"
+        assert packet.control_code == "connect", "Control code for hello packet incorrect!"
         assert recv_addr == addr, "Address mismatch! Expected: %s .Received: %s" %(addr,recv_addr)
         
         return recv_id
