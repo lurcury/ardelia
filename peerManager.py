@@ -23,12 +23,12 @@
     Notes & TODO:
         - use sockets or ssl?
         - decide on delays and timeout limitations
-        - initialize with private key, format= bytes/wif ? --> need to keep identity() in peerManager?
+        * initialize with private key, format= bytes/wif ? --> need to keep identity() in peerManager?
             * no need for all keys --> only keep privkey and id for now
-        - pubkey or pubID? decide format of bootstrap_nodes
-            * (addr, pubkey) for now
+        * pubkey or pubID? decide format of bootstrap_nodes
+            * (addr, pubID) for now
         - in discovery(), connect to random peers, nearest neighbors, or other?
-        - bootstrap/discover nodes --> see last note in peer.py
+        - discovery!! 
 """
 import time
 import random
@@ -37,6 +37,8 @@ import gevent
 from gevent.server import DatagramServer as Server
 from gevent.socket import create_connection, timeout
 import .crypto
+
+ENCODING = 'utf-8'
 
 def peer_die(peer):
     peer.stop()
@@ -63,7 +65,7 @@ class PeerManager(gevent.Greenlet):
         self.server = Server(self.address, handle=self._new_conn)
         # make sure privkey is given in config
         self.configs['node']['id'] = crypto.priv2addr(self.configs['node']['privkey'])
-        
+        self.hello_packet = self.construct_hello()
         # needs further investigation
         self.upnp = None
         self.errors = PeerErrors() if self.configs['log_disconnects'] else None
@@ -84,9 +86,29 @@ class PeerManager(gevent.Greenlet):
         super(PeerManager,self).stop()
 
     def _new_conn(self, data, addr):
-        pubkey = str(data, 'ascii')
-        self.connect(addr, pubkey)
+        try:
+            pubID = self.recv_hello(data, addr)
+        except AssertionError as e:
+            print("Receive hello failed. ", e)
+        
+        try:
+            peer = self.connect(addr, pubID)
+        except socket.error:
+            print("Connection failed at peer address: %s", %addr)
+        else:
+            peer.join()
+        
+        self.approve_conn(peer)
 
+    def approve_conn(self, peer):
+        num_peers = len(self.peers)
+        max_peers = self.configs['p2p']['max_peers']
+        if num_peers > max_peers:
+            print("Too many connections! Disconnecting from peer %s" %peer.pubID)
+            disconnect_packet = p2p.Packet("disconnect", dict(pubID=self.configs['node']['id'], reason="too many peers"))
+            peer.send(disconnect_packet)
+            #peer.stop()
+        
 
     # TODO!!
     def discovery(self):
@@ -102,47 +124,75 @@ class PeerManager(gevent.Greenlet):
 
     def bootstrap(self, bootstrap_nodes=[]):
         for node in bootstrap_nodes:
-            addr, pubkey = node      #undecided format. temp: node = (addr, pubkey)
+            addr, pubID = node      #undecided format. temp: node = (addr, pubID)
             try:
-                self.connect(addr, pubkey)
+                peer = self.connect(addr, pubID)
             except socket.error:
-                print('bootstrap failed at peer address:', addr)
+                print('bootstrap failed at peer address: %s', %addr)
+            if not peer.connection.closed:
+                peer.send(self.hello_packet)
 
-    def connect(self, address, pubkey):
+    def connect(self, address, pubID):
         """
         gevent.socket.create_connection(address, timeout=Timeout, source_address=None)
         Connect to address (a 2-tuple (host, port)) and return the socket object.
         """
-        print('Connecting to: ', address)
+        print('Connecting to: %s', %address)
         try:
             connection = create_connection(address, timeout=self.configs['p2p']['timeout'], source_address=self.address)
         except socket.timeout:
             #self.errors.add(address, 'connection timeout')
-            print('Connection timeout at address:', address)
+            print('Connection timeout at address: %s', %address)
             return False
         except socket.error as e:
             #self.errors.add(address, 'connection error')
-            print('Connection error at address:', address)
+            print('Connection error at address: %s', %address)
             print(e)
             return False
         # successful connection
-        self.start_peer(connection, address, pubkey)
-        return True
+        peer = self.start_peer(connection, address, pubID)
+        return peer
     
-    def start_peer(self, connection, address, pubkey):
-        pubID = crypto.pub2addr(pubkey)
-        print('Starting new peer:', pubID)
+    def start_peer(self, connection, address, pubID):
+        #pubID = crypto.pub2addr(pubkey)
+        print('Starting new peer: %s', %pubID)
         peer = Peer(self, connection, address, pubID)
         peer.link(peer_die)
         self.peers.append(peer)
         peer.start()
+        assert not connection.closed
         return peer
 
     # do we need this? yes, we do, and we also need a send() for a specific peer
     # change: use peermanager.broadcast() for broadcasts; use peer.send() for direct transports
-    def broadcast(self, *args, num_peers=None, excluded=[]):
+    def broadcast(self, packet, num_peers=None, excluded=[]):
         valid_peers = [p for p in self.peers if p not in excluded]
         num_peers = num_peers if num_peers else len(valid_peers)
         for peer in random.sample(valid_peers, min(num_peers, len(valid_peers))):
-            peer.protocol.send(*args)
+            #peer.protocol.send(message)
+            peer.send(packet)
             peer.safe_to_read.wait()
+
+    def recv_hello(self, packet, addr):
+        'Check if hello packet is correct and return pubID to create connection.'
+        #packet = p2p.decode(packet)
+        packet = packet.decode(ENCODING)
+        try:
+            recv_addr = packet.data['addr']
+        except KeyError:
+            print("Missing sender address in hello packet!")
+        try:
+            recv_id = packet.data['pubID']
+        except KeyError:
+            print("Missing sender public ID in hello packet!")
+
+        assert packet.control_code == "hello", "Control code for hello packet incorrect!"
+        assert recv_addr == addr, "Address mismatch! Expected: %s .Received: %s" %(addr,recv_addr)
+        
+        return recv_id
+
+
+    def construct_hello(self):
+        'Construct hello packet. Format: [0,{addr:sender_addr, pubID:sender_pubID}]'
+        packet = p2p.Packet("connect", dict(addr=self.address, pubID=self.configs['node']['id']))
+        return packet

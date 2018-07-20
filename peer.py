@@ -19,16 +19,21 @@
         - receive hello: check with manager to confirm successful peer connection
         - run: coordinate send() and receive() greenlets
             - send: send packet by queue.put()
-            - receive: get packet by queue.get()
+            - receive: basic processing of packet & sendup by queue.put()
 
     Notes & TODO:
-        - inbox, outbox queue --> decoding(extract packet) & encoding(use protocol?)
-        - how to implement hello packet under UDP?
+        * inbox, outbox queue --> decoding(extract packet) & encoding(use protocol?)
+        * how to implement hello packet under UDP?
         - decide message size through connection, ideally 1024~4096, 4096 for now
-        - when bootstrapping/discovering peermanager, use peer.send() to send connect_request
+        * when bootstrapping/discovering peermanager, use peer.send() to send connect_request
+        - remove self.protocol if not needed
 """
 
 import gevent
+import .p2p
+import errno
+
+ENCODING = 'utf-8'
 
 class Peer(gevent.Greenlet):
 
@@ -38,7 +43,7 @@ class Peer(gevent.Greenlet):
         self.connection = connection
         self.pubID = pubID
         self.is_stopped = False
-        self.get_hello = False
+        #self.get_hello = False
         self.greenlets = dict()
         self.read_ready = gevent.event.Event()
         self.read_ready.set()
@@ -46,8 +51,6 @@ class Peer(gevent.Greenlet):
         self.protocol.start()
         self.outbox = gevent.queue.Queue()
         self.inbox = gevent.queue.Queue()
-        # not sure about this one
-        hello_packet = self.protocol.get_hello_packet()
 
     
     def stop(self):
@@ -70,6 +73,13 @@ class Peer(gevent.Greenlet):
         self.greenlets['sender'] = gevent.spawn(self.send_message)
         self.greenlets['receiver'] = gevent.spawn(self.get_message)
 
+    def send_message(self):
+        'Main sending process'
+        while not self.is_stopped:
+            self.send(self.outbox.get())
+
+    def get_message(self):
+        'Main receiving process'
         while not self.is_stopped:
             self.read_ready.wait()
             try:
@@ -80,33 +90,54 @@ class Peer(gevent.Greenlet):
                     self.stop()
                 else:
                     raise e 
-                    break
+
             try:
                 message = self.connection.recv(4096)        # byte size tbd(1024, 2048, or 4096)
-            except gevent,socket.error as e:
+            except gevent.socket.error as e:
                 print('Network error: %s' %e.strerror)
                 if e.errno in (errno.ENETDOWN, errno.ECONNRESET, errno.ETIMEDOUT,errno.EHOSTUNREACH, errno.ECONNABORTED):
                     self.stop()
                 else:
                     raise e 
-                    break
+
             if message:
-                
-                #add message to inbox --> decode before adding?
-                self.inbox.put(message)
+                try:
+                    control, data = self.parse(message)
+                except AssertionError:
+                    print("Message sent is not a valid packet!")
+                else:
+                    if control == "connect":
+                        print("Already connected to this peer! Disconnecting from peer %s" % data['pubID'])
+                        disconnect_packet = p2p.Packet("disconnect", dict(pubID=self.pubID, reason="duplicate hello"))
+                        self.send(disconnect_packet)
+                        self.stop()
+                    elif control == "disconnect":
+                        print("Received disconnect! Reason: ", data['reason'])
+                        self.stop()
+                    #elif control_code == "ping"
+                    #elif control_code == "pong"
+                    # other legit controls: [block, transaction, precommit, commit]
+                    else:
+                        self.inbox.put(message)
 
-    def send_message(self):
-        'Main sending process'
-        pass
+    def send(self, packet=None):
+        'Directly send packet through connection'
+        if not packet:
+            print("Missing packet!")
+            return
+        self.read_ready.clear()
+        try:
+            packet = packet.encode(ENCODING)
+            self.connection.sendall(packet)
+        except gevent.socket.error as e:
+            print("Error in send! ", e)
+            self.stop()
+        except gevent.socket.timeout as e:
+            print("Timeout in send! ", e)
+            self.stop()
+        self.read_ready.set()
 
-    def get_message(self):
-        'Main receiving process'
-        pass
-
-    def send(self, data):
-        'Directly send message through connection'
-        pass
-
-    # how to implement this under UDP?
-    def receive_hello(self):
-        pass
+    def parse(self, message):
+        packet = message.decode(ENCODING)
+        assert isinstance(packet,Packet)
+        return packet.control_code, packet.data
