@@ -9,11 +9,7 @@ class Packet():
     """
     Class for packets to be sent over network. 
     Supports encoding and decoding of packets.
-    format: 
-    [
-        control_code, 
-        {data}
-    ]
+    packet format: [ctrl, **kwargs] where **kwargs can be {node={address,pubID}, block={}, trans={}, commit={}, ...}
     """
     def __init__(self, ctrl=None, data={}):
         self.control_code = ctrl

@@ -14,17 +14,22 @@ from six import b
 
 
 def priv2addr(key):
-    k = _priv2pub(b(key))
-    k = _pub2addr(k)
+    k = _priv2addr(key)
     return str(k,'ascii')
 
 def pub2addr(key):
-    kk = _pub2addr(b(key))
+    k = _pub2addr(b(key))
     return str(k,'ascii')
 
 def priv2pub(key):
-    k = _priv2pub(b(key))
+    k = _priv2pub(key)
     return str(k,'ascii')
+
+def priv2wif(key):
+    return _encrypt(b(key), b"80") if key else None
+
+def wif2priv(key):
+    return base58.b58decode_check(b(key))[1:] if key else None
 
 # private functions
 def _priv2addr(key):
@@ -43,7 +48,7 @@ def _pub2addr(key):
     key = ripemd.digest()
     return _encrypt(key, b"00")
 
-def _encrypt(self, key, ad):
+def _encrypt(key, ad):
     key = ad + binascii.hexlify(key)
     hash_key = binascii.unhexlify(key)
     checksum = hashlib.sha256(hashlib.sha256(hash_key).digest()).digest()[:4]
