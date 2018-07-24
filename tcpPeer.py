@@ -69,6 +69,9 @@ class Peer(gevent.Greenlet):
     def get_message(self):
         'Main receiving process'
         while not self.is_stopped:
+            if not self.inbox.empty():
+                self.peermanager.recv_queue.put(self.inbox.get())
+            
             self.read_ready.wait()
             try:
                 gevent.socket.wait_read(self.connection.fileno())
@@ -122,7 +125,8 @@ class Peer(gevent.Greenlet):
                         assert data['transaction'] is not None, "Received empty transaction!"
                         print("Received transaction from %s" % data['node']['pubID'])
                         print(data['transaction'])
-                        self.send_packet(message)
+                        self.inbox.put(data)
+                        #self.send_packet(message)
                     else:
                         self.inbox.put(message)
 
@@ -138,6 +142,7 @@ class Peer(gevent.Greenlet):
             return
         else:
             self.outbox.put(packet)
+        self.read_ready.set()
 
 
     def send(self, packet=None):

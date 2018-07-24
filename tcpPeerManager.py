@@ -32,8 +32,8 @@ class PeerManager(gevent.Greenlet):
 
     def __init__(self, configs=None):
         print('Initializing peerManager....')
-        super().__init__()
-        #gevent.Greenlet.__init__(self)
+        #super().__init__()
+        gevent.Greenlet.__init__(self)
         self.is_stopped = False
         self.configs = configs if configs else self.default_config
         self.peers = []
@@ -45,14 +45,15 @@ class PeerManager(gevent.Greenlet):
             self.configs['node']['privkey'] = crypto.wif2priv(self.configs['node']['wif']) 
         self.configs['node']['id'] = crypto.priv2addr(self.configs['node']['privkey'])
         self.hello_packet = self.construct_hello()
+        self.recv_queue = gevent.queue.Queue()
         # needs further investigation
         #self.upnp = None
         #self.errors = PeerErrors() if self.configs['log_disconnects'] else None
     
     def start(self):
         print('Starting peerManager...')
-        super().start()
-        #gevent.Greenlet.start(self)
+        #super().start()
+        gevent.Greenlet.start(self)
         self.server.set_handle(self._new_conn)
         if self.configs['p2p']['forever']:
             self.server.serve_forever()
@@ -63,6 +64,7 @@ class PeerManager(gevent.Greenlet):
             print("server not started!")
             self.server.serve_forever()
         self.bootstrap(self.configs['p2p']['bootstrap_nodes'])
+        gevent.sleep(5)
         #gevent.spawn_later(0.001, self.bootstrap, self.configs['p2p']['bootstrap_nodes'])   # delays tbd
         #gevent.spawn_later(1, self.discovery)                                               # delays tbd
 
@@ -71,10 +73,11 @@ class PeerManager(gevent.Greenlet):
         self.server.stop()
         for peer in self.peers:
             peer.stop()
-        super().kill()
+        #super().kill()
         self.is_stopped = True
-        #gevent.Greenlet.kill(self)
-
+        gevent.Greenlet.kill(self)
+    
+    
     def _new_conn(self, conn, addr):
         print("received connection at peermanager")
         peer = self.start_peer(conn, addr)
@@ -126,7 +129,7 @@ class PeerManager(gevent.Greenlet):
         peer.send(confirm_packet)
 
     # TODO!!
-    '''
+    
     def discovery(self):
         gevent.sleep(self.configs['p2p']['discovery_delay'])     # yield to other processes
         while not self.is_stopped:
@@ -137,7 +140,11 @@ class PeerManager(gevent.Greenlet):
                     print('Min #peers: %i; Current #peers: %i' %(min_peers,num_peers))
                     # connect to random peers? 
                     # connect to nearest neighbors?
-    '''
+            except:
+                print ("exception in discovery loop.")
+        
+        evt = gevent.event.Event()
+        evt.wait()
 
     def bootstrap(self, bootstrap_nodes=[]):
         for node in bootstrap_nodes:
