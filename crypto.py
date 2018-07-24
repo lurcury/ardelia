@@ -55,3 +55,8 @@ def _encrypt(key, ad):
     key = key + binascii.hexlify(checksum)
     return base58.b58encode(binascii.unhexlify(key))
 
+
+if __name__ == "__main__":
+    priv = 'L1uyy5qTuGrVXrmrsvHWHgVzW9kKdrp27wBC7Vs6nZDTF2BRUVwy'
+    addr = priv2addr(priv)
+    print("wif:", addr)

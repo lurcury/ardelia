@@ -24,7 +24,7 @@ def main(argv):
             'max_peers':10,
             'listen_port':'',
             'listen_host':'127.0.0.1',
-            'timeout':1.0,
+            'timeout':6.0,
             'discovery_delay':0.1
         },
         'logs_disconnects':False
