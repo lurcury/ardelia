@@ -1,3 +1,10 @@
+'''
+    To fix:
+        - peerManager stopping? running?
+            - no "receiving" signal in peer1 after peer2 and peer3 broadcasted
+        - gevent event wait/sleep/clear/set
+        - figure out how to spawn multiple threads without peermanager dying    --> add to readme
+'''
 # testing p2p
 import gevent
 import sys
@@ -8,32 +15,35 @@ from tcpPeerManager import PeerManager
 from tcpPeer import Peer
 import p2p
 
+
+evt = gevent.event.Event()
+transaction1 = {
+    'fee': '100',
+    'to': 'cx68c59720de07e4fdc28efab95fa04d2d1c5a2fc1',
+    'out': {'cic':'100'},
+    'nonce': '10',
+    'type': 'cic',
+    'input': '90f4god100000000'
+}
+transaction2 = {
+    'fee': '100',
+    'to': 'cx68c59720de07e4fdc28efab95fa04d2d1c5a2fc1',
+    'out': {'cic':'100'},
+    'nonce': '10',
+    'type': 'cic',
+    'input': '90f4god100000000'
+}
+transaction3 = {
+    'fee': '100',
+    'to': 'cx68c59720de07e4fdc28efab95fa04d2d1c5a2fc1',
+    'out': {'cic':'100'},
+    'nonce': '10',
+    'type': 'cic',
+    'input': '90f4god100000000'
+}
+
 def main(argv):
     
-    transaction1 = {
-        'fee': '100',
-        'to': 'cx68c59720de07e4fdc28efab95fa04d2d1c5a2fc1',
-        'out': {'cic':'100'},
-        'nonce': '10',
-        'type': 'cic',
-        'input': '90f4god100000000'
-    }
-    transaction2 = {
-        'fee': '100',
-        'to': 'cx68c59720de07e4fdc28efab95fa04d2d1c5a2fc1',
-        'out': {'cic':'100'},
-        'nonce': '10',
-        'type': 'cic',
-        'input': '90f4god100000000'
-    }
-    transaction3 = {
-        'fee': '100',
-        'to': 'cx68c59720de07e4fdc28efab95fa04d2d1c5a2fc1',
-        'out': {'cic':'100'},
-        'nonce': '10',
-        'type': 'cic',
-        'input': '90f4god100000000'
-    }
     config = {
         'node' : {'privkey':'','wif':''},
         'p2p' : {
@@ -93,27 +103,48 @@ def main(argv):
         print('No such peer!!')
     
     print("Configs for peer: %s" % test_subject)
+    evt.clear()
     pm = PeerManager(config)
     pm.start()
-    if test_subject == 'peer2':
-        packet = p2p.Packet("transaction", dict(node=dict(address=pm.address, pubID=pm.configs['node']['id']),transaction=transaction1))
-        pm.broadcast(packet)
-    if test_subject == 'peer3':
-        packet = p2p.Packet("transaction", dict(node=dict(address=pm.address, pubID=pm.configs['node']['id']),transaction=transaction2))
-        pm.broadcast(packet)
-    if test_subject == 'peer4':
-        packet = p2p.Packet("transaction", dict(node=dict(address=pm.address, pubID=pm.configs['node']['id']),transaction=transaction3))
-        pm.send(packet,pb1)
-    #pm2.send(packet2,pb1)
-    if not pm.recv_queue.empty():
-        print("You've got mail!")
-    evt = gevent.event.Event()
+    
+    thread1 = gevent.spawn(run_pm_loop, pm, test_subject)
+    thread2 = gevent.spawn(end_pm, pm)
+    
+    gevent.joinall([thread1, thread2])
+    #evt = gevent.event.Event()
+    #gevent.signal(signal.SIGQUIT, evt.set)
+    #gevent.signal(signal.SIGTERM, evt.set)
+    #gevent.signal(signal.SIGINT, evt.set)
+    #evt.wait()
+    
+
+def run_pm_loop(pm, test_subject):
+    print("running!")
+    #evt.clear()
     gevent.signal(signal.SIGQUIT, evt.set)
     gevent.signal(signal.SIGTERM, evt.set)
     gevent.signal(signal.SIGINT, evt.set)
+    while not pm.is_stopped:
+        # the same as: if keyboard interrupt: evt.set()
+        if test_subject == 'peer2':
+            packet = p2p.Packet("transaction", dict(node=dict(address=pm.address, pubID=pm.configs['node']['id']),transaction=transaction1))
+            pm.broadcast(packet)
+        if test_subject == 'peer3':
+            packet = p2p.Packet("transaction", dict(node=dict(address=pm.address, pubID=pm.configs['node']['id']),transaction=transaction2))
+            pm.broadcast(packet)
+        #if test_subject == 'peer4':
+        #    packet = p2p.Packet("transaction", dict(node=dict(address=pm.address, pubID=pm.configs['node']['id']),transaction=transaction3))
+        #    pm.send(packet,pb1)
+        #pm2.send(packet2,pb1)
+        if not pm.recv_queue.empty():
+            print("You've got mail! #of mails: %i" % len(pm.recv_queue))
+        #gevent.wait(timeout=2.0)
+
+def end_pm(pm):
+    print("blocking!")
     evt.wait()
-    
-    #gevent.wait(pm1)
+    print("non-blocking!")
+    pm.stop()
 
 if __name__ == '__main__':
     main(sys.argv)

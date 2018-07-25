@@ -1,4 +1,42 @@
 ##  TCP  peer  ##
+"""
+    Class Peer 
+        - initialized by peerManager with socket connection
+        - contains pubkey of connected peer
+        - takes care of packet sending and receiving
+
+    Data members:
+        - peerManager
+        - connection
+        - pubkey
+        - greenlet processes
+        - outbox (send_queue with messages waiting to be sent)
+        - inbox (recv_queue with messages waiting to be processed)
+        - other configs
+
+    Functions:
+        - init: setup configurations
+        - stop: kill greenlet processes
+        - receive hello: check with manager to confirm successful peer connection
+        - run: coordinate send() and receive() greenlets
+            - send: send packet by queue.put()
+            - receive: basic processing of packet & sendup by queue.put()
+        - send: direct send through connection      --> hello packet, disconnect packet
+        - send packet: add packet to queue          --> usual method
+
+    Notes & TODO:
+        - TCP + UDP connection for different packets
+            - need new protocol -> 2 port connections?
+            - regulate traffic and ensure delivery 
+                - spam attacks / signature verification?
+            - keep track of <state> in peer/peermanager
+        -
+        * inbox, outbox queue --> decoding(extract packet) & encoding(use protocol?)
+        * how to implement hello packet under UDP?
+        * decide message size through connection, ideally 1024~4096, 4096 for now
+        * when bootstrapping/discovering peermanager, use peer.send() to send connect_request
+"""
+
 import gevent
 import p2p
 import errno
@@ -17,7 +55,8 @@ class Peer(gevent.Greenlet):
         self.connection = connection
         self.udp_sock = None
         self.pubID = pubID
-        #self.own_addr = address
+        self.own_id = self.peermanager.configs['node']['id']
+        self.own_addr = connection.getsockname()
         self.to_addr = address
         self.is_stopped = False
         #self.get_hello = False
@@ -28,7 +67,6 @@ class Peer(gevent.Greenlet):
         #self.protocol.start()
         self.outbox = gevent.queue.Queue()
         self.inbox = gevent.queue.Queue()
-
     
     def stop(self):
         if not self.is_stopped:
@@ -105,16 +143,19 @@ class Peer(gevent.Greenlet):
                         self.peermanager.approve_conn(self)
                         if not self.pubID:
                             self.pubID = data['node']['pubID']
-                        print("received hello from peer: %s" %self.pubID)
+                        self.to_addr = data['node']['address']
+                        print("received hello from peer: %s, at address %s" % (self.pubID, self.to_addr))
+                        #self.send_confirm()
                         #self.peermanager.confirm_conn(self)
                         #pk = dict(node=dict(address=self.address, pubID=self.pubID), reason="duplicate hello")
                         #disconnect_packet = p2p.Packet("disconnect", pk)
                         #self.send(disconnect_packet)
                         #self.stop()
                     elif control == "confirm":
-                        print("received confirm packet! change address")
-                        self.connection.connect(data['node']['address'])
-                        self.to_addr = data['node']['address']
+                        print("received confirm packet!")
+                        print("Checking connection and address...", (self.to_addr == data['node']['address']))
+                        #self.connection.connect(data['node']['address'])
+                        #self.to_addr = data['node']['address']
                     elif control == "disconnect":
                         print("Received disconnect! Reason: ", data['reason'])
                         self.stop()
@@ -171,3 +212,14 @@ class Peer(gevent.Greenlet):
         #packet = message.decode(ENCODING)
         assert isinstance(packet,p2p.Packet)
         return packet.control_code, packet.data
+    
+    def send_hello(self, serverid):
+        'Construct hello packet and send. Format: [0,{addr:sender_addr, pubID:sender_pubID}]'
+        packet = p2p.Packet("connect", dict(node=dict(address=self.own_addr, pubID=serverid)))
+        self.send(packet)
+        #return packet
+    
+    def send_confirm(self):
+        'Return confirm packet to ensure successful connection.'
+        confirm_packet = p2p.Packet("confirm", dict(node=dict(address=self.own_addr, pubID=self.own_id)))
+        self.send(confirm_packet)

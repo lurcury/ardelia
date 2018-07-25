@@ -1,4 +1,42 @@
 ##  TCP  peermanager  ##
+"""
+    Class PeerManager
+        - 1 for each node, bound to address(runs server) and protocol
+        - manages list of peers and handles connection errors
+        - uses kademlia to discover new nodes
+
+    Data members:
+        - list of peers
+        - address
+        - private key
+        - server
+        - message queue from peers
+        - hello packet
+        - other configs(max, min number of peers allowed, timeout, delays...)
+
+    Functions:
+        - init: setup configurations, initialize instances
+        - start: bootstrap to nodes, start server, run discovery loop(?)
+        - stop: stop server and peers
+        - connect: create socket connections -> create peers and add to list
+        - approve_conn: check if connect request is legal
+        - broadcast: send packet to all peers except 'excluded_peers'
+        - send: send packet to specific peer
+
+    Notes & TODO:
+        - use sockets or ssl?
+        - decide on delays and timeout limitations
+        - handle mutual bootstrapping --> no duplicate connections
+            - handshake: hello + confirm??
+        - in discovery(), connect to random peers, nearest neighbors, or other?
+        - separate file for discovery & kademlia
+        * initialize with private key, format= bytes/wif ? --> need to keep identity() in peerManager?
+            * no need for all keys --> only keep privkey and id for now
+        * pubkey or pubID? decide format of bootstrap_nodes
+            * (addr, pubID) for now
+        * change packet format to [ctrl, **kwargs] where **kwargs can be {node={addr,id}, block={}, trans={}, commit={}, ...}
+"""
+
 import time
 import random
 import socket
@@ -44,7 +82,7 @@ class PeerManager(gevent.Greenlet):
             #print("Creating private key!!")
             self.configs['node']['privkey'] = crypto.wif2priv(self.configs['node']['wif']) 
         self.configs['node']['id'] = crypto.priv2addr(self.configs['node']['privkey'])
-        self.hello_packet = self.construct_hello()
+        #self.hello_packet = self.construct_hello()
         self.recv_queue = gevent.queue.Queue()
         # needs further investigation
         #self.upnp = None
@@ -123,10 +161,6 @@ class PeerManager(gevent.Greenlet):
             return False'''
         return True
 
-    def confirm_conn(self, peer):
-        'Return confirm packet to ensure successful connection.'
-        confirm_packet = p2p.Packet("confirm", dict(node=dict(address=self.address, pubID=self.configs['node']['id'])))
-        peer.send(confirm_packet)
 
     # TODO!!
     
@@ -143,8 +177,8 @@ class PeerManager(gevent.Greenlet):
             except:
                 print ("exception in discovery loop.")
         
-        evt = gevent.event.Event()
-        evt.wait()
+        #evt = gevent.event.Event()
+        #evt.wait()
 
     def bootstrap(self, bootstrap_nodes=[]):
         for node in bootstrap_nodes:
@@ -205,7 +239,7 @@ class PeerManager(gevent.Greenlet):
         peer.link(peer_die)
         self.peers.append(peer)
         peer.start()
-        peer.send(self.hello_packet)
+        peer.send_hello(self.configs['node']['id'])#(self.hello_packet)
         assert not connection.closed
         return peer
 
@@ -229,6 +263,7 @@ class PeerManager(gevent.Greenlet):
         peer[0].send_packet(packet)
         peer[0].read_ready.wait()
     
+    #trashy parts for now 
     def recv_hello(self, packet, addr):
         'Check if hello packet is correct and return pubID to create connection.'
         #packet = p2p.decode(packet)
