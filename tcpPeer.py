@@ -1,3 +1,4 @@
+##  TCP  peer  ##
 """
     Class Peer 
         - initialized by peerManager with socket connection
@@ -20,33 +21,44 @@
         - run: coordinate send() and receive() greenlets
             - send: send packet by queue.put()
             - receive: basic processing of packet & sendup by queue.put()
+        - send: direct send through connection      --> hello packet, disconnect packet
+        - send packet: add packet to queue          --> usual method
 
     Notes & TODO:
+        - TCP + UDP connection for different packets
+            - need new protocol -> 2 port connections?
+            - regulate traffic and ensure delivery 
+                - spam attacks / signature verification?
+            - keep track of <state> in peer/peermanager
+        -
         * inbox, outbox queue --> decoding(extract packet) & encoding(use protocol?)
         * how to implement hello packet under UDP?
-        - decide message size through connection, ideally 1024~4096, 4096 for now
+        * decide message size through connection, ideally 1024~4096, 4096 for now
         * when bootstrapping/discovering peermanager, use peer.send() to send connect_request
-        - remove self.protocol if not needed
 """
 
 import gevent
 import p2p
 import errno
 import pickle
+import socket
+import gevent.socket
 
 ENCODING = 'utf-8'
 
 class Peer(gevent.Greenlet):
 
-    def __init__(self, peermanager, connection, pubID, address):
+    def __init__(self, peermanager, connection, address, pubID=None):
         #super(Peer,self).__init__()
         super().__init__()
         self.peermanager = peermanager
         self.connection = connection
+        self.udp_sock = None
         self.pubID = pubID
-        self.own_addr = address
+        self.own_id = self.peermanager.configs['node']['id']
+        self.own_addr = connection.getsockname()
+        self.to_addr = address
         self.is_stopped = False
-        self.is_closed = False
         #self.get_hello = False
         self.greenlets = dict()
         self.read_ready = gevent.event.Event()
@@ -55,7 +67,6 @@ class Peer(gevent.Greenlet):
         #self.protocol.start()
         self.outbox = gevent.queue.Queue()
         self.inbox = gevent.queue.Queue()
-
     
     def stop(self):
         if not self.is_stopped:
@@ -73,6 +84,13 @@ class Peer(gevent.Greenlet):
                 self.peermanager.peers.remove(self)
                 self.kill()
     
+    def create_UDP_socket(self, address):
+        'Create a socket to take care of UDP transfers'
+        if not self.udp_sock:
+            self.udp_sock = gevent.socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.to_addr = address
+    
+    
     def run(self):
         print('Running main loop of peer ', self.pubID)
         assert not self.connection.closed, "Connection closed!"
@@ -89,6 +107,9 @@ class Peer(gevent.Greenlet):
     def get_message(self):
         'Main receiving process'
         while not self.is_stopped:
+            if not self.inbox.empty():
+                self.peermanager.recv_queue.put(self.inbox.get())
+            
             self.read_ready.wait()
             try:
                 gevent.socket.wait_read(self.connection.fileno())
@@ -105,6 +126,7 @@ class Peer(gevent.Greenlet):
                 print('Network error: %s' %e.strerror)
                 if e.errno in (errno.ENETDOWN, errno.ECONNRESET, errno.ETIMEDOUT,errno.EHOSTUNREACH, errno.ECONNABORTED):
                     self.stop()
+                    print(e)
                 else:
                     raise e 
 
@@ -116,14 +138,24 @@ class Peer(gevent.Greenlet):
                     print("Message sent is not a valid packet!")
                 else:
                     if control == "connect":
-                        print("Already connected to this peer! Disconnecting from peer %s" % data['node']['pubID'])
+                        #print("Already connected to this peer! Disconnecting from peer %s" % data['node']['pubID'])
+                        #print("received hello from peer!")
+                        self.peermanager.approve_conn(self)
+                        if not self.pubID:
+                            self.pubID = data['node']['pubID']
+                        self.to_addr = data['node']['address']
+                        print("received hello from peer: %s, at address %s" % (self.pubID, self.to_addr))
+                        #self.send_confirm()
+                        #self.peermanager.confirm_conn(self)
                         #pk = dict(node=dict(address=self.address, pubID=self.pubID), reason="duplicate hello")
                         #disconnect_packet = p2p.Packet("disconnect", pk)
                         #self.send(disconnect_packet)
                         #self.stop()
                     elif control == "confirm":
-                        print("received confirm packet! change address")
-                        self.connection.connect(data['node']['address'])
+                        print("received confirm packet!")
+                        print("Checking connection and address...", (self.to_addr == data['node']['address']))
+                        #self.connection.connect(data['node']['address'])
+                        #self.to_addr = data['node']['address']
                     elif control == "disconnect":
                         print("Received disconnect! Reason: ", data['reason'])
                         self.stop()
@@ -134,8 +166,25 @@ class Peer(gevent.Greenlet):
                         assert data['transaction'] is not None, "Received empty transaction!"
                         print("Received transaction from %s" % data['node']['pubID'])
                         print(data['transaction'])
+                        self.inbox.put(data)
+                        #self.send_packet(message)
                     else:
                         self.inbox.put(message)
+
+    def send_packet(self,packet=None):
+        'Put packet into queue to be sent'
+        if not packet:
+            print("Missing packet!")
+            return
+        print("sending packet...")
+        self.read_ready.clear()
+        if self.connection.closed:
+            print("Connection dead!")
+            return
+        else:
+            self.outbox.put(packet)
+        self.read_ready.set()
+
 
     def send(self, packet=None):
         'Directly send packet through connection'
@@ -163,3 +212,14 @@ class Peer(gevent.Greenlet):
         #packet = message.decode(ENCODING)
         assert isinstance(packet,p2p.Packet)
         return packet.control_code, packet.data
+    
+    def send_hello(self, serverid):
+        'Construct hello packet and send. Format: [0,{addr:sender_addr, pubID:sender_pubID}]'
+        packet = p2p.Packet("connect", dict(node=dict(address=self.own_addr, pubID=serverid)))
+        self.send(packet)
+        #return packet
+    
+    def send_confirm(self):
+        'Return confirm packet to ensure successful connection.'
+        confirm_packet = p2p.Packet("confirm", dict(node=dict(address=self.own_addr, pubID=self.own_id)))
+        self.send(confirm_packet)
