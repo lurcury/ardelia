@@ -75,8 +75,11 @@ class Peer(gevent.Greenlet):
                 self.is_stopped = True
                 self.is_closed = True
                 for process in self.greenlets.values():
-                    process.kill()
-                    self.greenlets = None
+                    try:
+                        process.kill()
+                    except gevent.GreenletExit:
+                        print("greenlet kill successful.")
+                self.greenlets = None
                 #self.protocol.stop()
             except:
                 print('Failed to kill all processes.')
@@ -126,7 +129,7 @@ class Peer(gevent.Greenlet):
                 print('Network error: %s' %e.strerror)
                 if e.errno in (errno.ENETDOWN, errno.ECONNRESET, errno.ETIMEDOUT,errno.EHOSTUNREACH, errno.ECONNABORTED):
                     self.stop()
-                    print(e)
+                    #print(e)
                 else:
                     raise e 
 
@@ -157,7 +160,7 @@ class Peer(gevent.Greenlet):
                         #self.connection.connect(data['node']['address'])
                         #self.to_addr = data['node']['address']
                     elif control == "disconnect":
-                        print("Received disconnect! Reason: ", data['reason'])
+                        print("Received disconnect from peer %s! Reason: %s" %(self.pubID, data['reason']))
                         self.stop()
                     #elif control_code == "ping"
                     #elif control_code == "pong"
@@ -214,7 +217,7 @@ class Peer(gevent.Greenlet):
         return packet.control_code, packet.data
     
     def send_hello(self, serverid):
-        'Construct hello packet and send. Format: [0,{addr:sender_addr, pubID:sender_pubID}]'
+        'Construct hello packet and send. Format: ["connect",{addr:sender_addr, pubID:sender_pubID}]'
         packet = p2p.Packet("connect", dict(node=dict(address=self.own_addr, pubID=serverid)))
         self.send(packet)
         #return packet
@@ -223,3 +226,8 @@ class Peer(gevent.Greenlet):
         'Return confirm packet to ensure successful connection.'
         confirm_packet = p2p.Packet("confirm", dict(node=dict(address=self.own_addr, pubID=self.own_id)))
         self.send(confirm_packet)
+
+    def send_disconnect(self):
+        'Construct disconnect packet and send. Format: ["disconnect",{addr:sender_addr, pubID:sender_pubID}]'
+        packet = p2p.Packet("disconnect", dict(node=dict(address=self.own_addr, pubID=self.own_id),reason='stopping peer!'))
+        self.send(packet)

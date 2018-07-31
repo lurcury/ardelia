@@ -110,6 +110,7 @@ class PeerManager(gevent.Greenlet):
         print('Stopping peerManager..')
         self.server.stop()
         for peer in self.peers:
+            peer.send_disconnect()
             peer.stop()
         #super().kill()
         self.is_stopped = True
@@ -247,21 +248,26 @@ class PeerManager(gevent.Greenlet):
     # change: use peermanager.broadcast() for broadcasts; use peer.send() for direct transports
     def broadcast(self, packet, num_peers=None, excluded=[]):
         print("broadcasting...")
-        valid_peers = [p for p in self.peers if p not in excluded]
+        valid_peers = [p for p in self.peers if p.pubID not in excluded]
         num_peers = num_peers if num_peers else len(valid_peers)
         print("#peers to broadcast: %i" % min(num_peers, len(valid_peers)))
         for peer in random.sample(valid_peers, min(num_peers, len(valid_peers))):
             #peer.protocol.send(message)
-            print("Sending broadcast to peer: %s" % peer.pubID)
-            peer.send_packet(packet)
-            peer.read_ready.wait()
+            if not self.is_stopped:
+                print("Sending broadcast to peer: %s" % peer.pubID)
+                peer.send_packet(packet)
+                #peer.read_ready.wait()
+                #gevent.sleep(0.5)
 
     def send(self, packet, pubID):
-        print("sending to specific peer: %s" % pubID)
-        peer = [p for p in self.peers if p.pubID==pubID]
-        assert len(peer) == 1, "too many peers"
-        peer[0].send_packet(packet)
-        peer[0].read_ready.wait()
+        if not self.is_stopped:
+            print("sending to specific peer: %s" % pubID)
+            peer = [p for p in self.peers if p.pubID==pubID]
+            if peer is not None:
+                assert len(peer) == 1, "too many peers"
+                peer[0].send_packet(packet)
+            #gevent.sleep(0)
+            #peer[0].read_ready.wait()
     
     #trashy parts for now 
     def recv_hello(self, packet, addr):
