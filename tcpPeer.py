@@ -71,9 +71,9 @@ class Peer(gevent.Greenlet):
     def stop(self):
         if not self.is_stopped:
             print("Trying to stop peer.")
+            self.is_stopped = True
             try:
                 self.is_stopped = True
-                self.is_closed = True
                 for process in self.greenlets.values():
                     try:
                         process.kill()

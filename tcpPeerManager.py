@@ -109,11 +109,12 @@ class PeerManager(gevent.Greenlet):
     def stop(self):
         print('Stopping peerManager..')
         self.server.stop()
+        self.is_stopped = True
         for peer in self.peers:
             peer.send_disconnect()
             peer.stop()
         #super().kill()
-        self.is_stopped = True
+        #self.is_stopped = True
         gevent.Greenlet.kill(self)
     
     
@@ -263,7 +264,7 @@ class PeerManager(gevent.Greenlet):
         if not self.is_stopped:
             print("sending to specific peer: %s" % pubID)
             peer = [p for p in self.peers if p.pubID==pubID]
-            if peer is not None:
+            if peer:
                 assert len(peer) == 1, "too many peers"
                 peer[0].send_packet(packet)
             #gevent.sleep(0)
