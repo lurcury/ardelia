@@ -63,7 +63,7 @@ class Protocol(gevent.Greenlet):
                 packet = Packet(ctrl="ping", node_info=self.node_info, pubkey=self.pubkey, data='ping')
                 self.signsend(packet)
             elif raw['action'] == 4:
-                packet = Packet(ctrl="ping", node_info=self.node_info, pubkey=self.pubkey, data='pong')
+                packet = Packet(ctrl="pong", node_info=self.node_info, pubkey=self.pubkey, data='pong')
                 self.signsend(packet)
             elif raw['action'] == 5:
                 packet = Packet(ctrl="data", node_info=self.node_info, pubkey=self.pubkey, data=raw['payload'])

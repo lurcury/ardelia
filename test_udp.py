@@ -50,11 +50,11 @@ config = {
         'bootstrap_nodes' : [],
         'min_peers':1,
         'max_peers':10,
-        'num_workers':5,
+        'num_workers':3,
         'listen_port':'',
         'listen_host':'127.0.0.1',
-        'timeout':7.0,
-        'pingtime':4.0,
+        'timeout':15.0,
+        'pingtime':7.0,
         'discovery_delay':0.1
     },
 }
@@ -141,18 +141,19 @@ def run_pm_loop(pm, test_subject):
     if test_subject == 'peer1':
         gevent.sleep(2)
         packet = dict(data=transaction1)
-        pm.send(json.dumps(packet),pb2)   
+        #pm.send(json.dumps(packet),pb2)   
+        pm.send(packet,pb2)   
     if test_subject == 'peer2':
         gevent.sleep(1.2)
         packet = dict(data=transaction2)
-        pm.send(json.dumps(packet),pb3)
+        pm.send(packet,pb3) 
     if test_subject == 'peer3':
         gevent.sleep(0.6)
         packet = dict(data=transaction3)
-        pm.send(json.dumps(packet),pb4)
+        pm.send(packet,pb4) 
     if test_subject == 'peer4':
         packet = dict(data=transaction4)
-        pm.send(json.dumps(packet),pb1)
+        pm.send(packet,pb1) 
     start_time = time.time()
     count = 0
     print("running! time: %f" %start_time)
@@ -161,11 +162,12 @@ def run_pm_loop(pm, test_subject):
             count = count+1
             print("You've got mail! #of mails: %i" % len(pm.recv_queue))
             msg = pm.recv_queue.get()
-            data = json.loads(msg['data'])
-            print("One mail from: %s \n There are %i messages left in inbox.\n %s" % (msg['nodeID'], len(pm.recv_queue), data))
+            #data = json.loads(msg['data'])
+            print("One mail from: %s \n There are %i messages left in inbox.\n %s" % (msg['nodeID'], len(pm.recv_queue), msg['data']))#data))
             if not test_subject == 'peer4':
                 print("Broadcasting received message...")
-                pm.broadcast(json.dumps(data),excluded=[msg['nodeID']])
+                #pm.broadcast(json.dumps(data),excluded=[msg['nodeID']])
+                pm.broadcast(msg['data'],excluded=[msg['nodeID']])
             print("Count: %i, time elapsed: %f" %(count, time.time()-start_time))
         gevent.sleep(1)
     

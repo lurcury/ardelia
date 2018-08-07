@@ -28,8 +28,8 @@ class PeerManager(gevent.Greenlet):
                                    num_workers=1,
                                    listen_port=30303,
                                    listen_host='0.0.0.0',
-                                   timeout = 6.0,           # tbd
-                                   pingtime = 3.0,
+                                   timeout = 10.0,           # tbd
+                                   pingtime = 5.0,
                                    discovery_delay = 0.1),  # tbd
                           node=dict(privkey=None, wif=None))
 

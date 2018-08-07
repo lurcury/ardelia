@@ -1,6 +1,7 @@
 ## UDP Peer ##
 import time
 import gevent
+import json
 from gevent.queue import Queue as Queue
 from p2p import Packet
 from udpProtocol import Protocol
@@ -140,6 +141,7 @@ class Peer(gevent.Greenlet):
         self.stop()
 
     def send_packet(self, packet):
+        packet = json.dumps(packet)
         self.handler.sQ.put(dict(action=5,payload=packet))
 
     def send_ping(self):
@@ -153,5 +155,6 @@ class Peer(gevent.Greenlet):
             self.stop()
         if rp[0] == "data":
             self.peermanager.log(self.peerID, 1)
+            rp[1]['data'] = json.loads(rp[1]['data'])
             self.peermanager.recv_queue.put(rp[1])
     
