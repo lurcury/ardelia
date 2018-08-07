@@ -117,31 +117,10 @@ def main(argv):
     
 
 def run_pm_loop(pm, test_subject):
-    '''
-    #Test 1: peer1 sending data to peer2
-    start_time = time.time()
-    count = 0
-    print("running! time: %f" %start_time)
-    while pm.state is State.STARTED:
-        if test_subject == 'peer1':
-            packet = dict(data=transaction1)
-            pm.send(json.dumps(packet),pb2)
-            gevent.sleep(1)
-        if test_subject == 'peer2':
-            if not pm.recv_queue.empty():
-                count = count+1
-                print("You've got mail! #of mails: %i" % len(pm.recv_queue))
-                msg = json.loads(pm.recv_queue.get())
-                print("One mail from: %s \n There are %i messages left in inbox. \n %s" % (msg['nodeID'], len(pm.recv_queue), msg['data']))
-                print("Count: %i, time elapsed: %f" %(count, time.time()-start_time))
-            gevent.sleep(0)
-    
-    '''
-    # Another test: 4 peers broadcasting and receiving
+    # Test: 4 peers broadcasting and receiving
     if test_subject == 'peer1':
         gevent.sleep(2)
         packet = dict(data=transaction1)
-        #pm.send(json.dumps(packet),pb2)   
         pm.send(packet,pb2)   
     if test_subject == 'peer2':
         gevent.sleep(1.2)
@@ -162,11 +141,9 @@ def run_pm_loop(pm, test_subject):
             count = count+1
             print("You've got mail! #of mails: %i" % len(pm.recv_queue))
             msg = pm.recv_queue.get()
-            #data = json.loads(msg['data'])
             print("One mail from: %s \n There are %i messages left in inbox.\n %s" % (msg['nodeID'], len(pm.recv_queue), msg['data']))#data))
             if not test_subject == 'peer4':
                 print("Broadcasting received message...")
-                #pm.broadcast(json.dumps(data),excluded=[msg['nodeID']])
                 pm.broadcast(msg['data'],excluded=[msg['nodeID']])
             print("Count: %i, time elapsed: %f" %(count, time.time()-start_time))
         gevent.sleep(1)
