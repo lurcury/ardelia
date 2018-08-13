@@ -10,6 +10,7 @@ class Packet():
         self.pubkey = pubkey
         self.signature = None
         self.data = data
+        self.msglen = len(data)
     
     def sign(self, privkey):
         self.signature = crypto.signdata(wif=privkey, data=self.data)

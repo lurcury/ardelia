@@ -121,7 +121,7 @@ class Protocol(gevent.Greenlet):
                 elif packet.ctrl_code == "data":
                     print ("Received data from ID: %s!" % str(packet.node['ID']))
                     if self.hello_received:
-                        self.rQ.put(("data", dict(nodeID=packet.node['ID'],data=packet.data)))
+                        self.rQ.put(("data", dict(nodeID=packet.node['ID'],data=packet.data,length=packet.msglen)))
                     else:
                         msg = "data received before confirming connection"
                         self.rQ.put(("disconnect", dict(type="badpeer",reason=msg)))

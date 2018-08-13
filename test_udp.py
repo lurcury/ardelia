@@ -13,6 +13,7 @@ from p2p import Packet
 
 evt = gevent.event.Event()
 transaction1 = {
+    'method': 'transactions',
     'fee': '100',
     'to': 'cx68c59720de07e4fdc28efab95fa04d2d1c5a2fc1',
     'out': {'cic':'100'},
@@ -21,7 +22,7 @@ transaction1 = {
     'input': '90f4god100000000'
 }
 transaction2 = {
-    'fee': '200',
+    'method': 'transactions',
     'to': 'cx68c59720de07e4fdc28efab95fa04d2d1c5a2fc1',
     'out': {'cic':'200'},
     'nonce': '10',
@@ -29,7 +30,7 @@ transaction2 = {
     'input': '90f4god100000000'
 }
 transaction3 = {
-    'fee': '300',
+    'method': 'transactions',
     'to': 'cx68c59720de07e4fdc28efab95fa04d2d1c5a2fc1',
     'out': {'cic':'300'},
     'nonce': '10',
@@ -37,7 +38,7 @@ transaction3 = {
     'input': '90f4god100000000'
 }
 transaction4 = {
-    'fee': '400',
+    'method': 'transactions',
     'to': 'cx68c59720de07e4fdc28efab95fa04d2d1c5a2fc1',
     'out': {'cic':'400'},
     'nonce': '10',
@@ -120,28 +121,28 @@ def run_pm_loop(pm, test_subject):
     # Test: 4 peers broadcasting and receiving
     if test_subject == 'peer1':
         gevent.sleep(2)
-        packet = dict(data=transaction1)
+        packet = transaction1
         pm.send(packet,pb2)   
     if test_subject == 'peer2':
         gevent.sleep(1.2)
-        packet = dict(data=transaction2)
+        packet = transaction2
         pm.send(packet,pb3) 
     if test_subject == 'peer3':
         gevent.sleep(0.6)
-        packet = dict(data=transaction3)
+        packet = transaction3
         pm.send(packet,pb4) 
     if test_subject == 'peer4':
-        packet = dict(data=transaction4)
+        packet = transaction4
         pm.send(packet,pb1) 
     start_time = time.time()
     count = 0
     print("running! time: %f" %start_time)
     while pm.state is State.STARTED:
-        if not pm.recv_queue.empty():
+        if not pm.recv_queue['transaction'].empty():
             count = count+1
-            print("You've got mail! #of mails: %i" % len(pm.recv_queue))
-            msg = pm.recv_queue.get()
-            print("One mail from: %s \n There are %i messages left in inbox.\n %s" % (msg['nodeID'], len(pm.recv_queue), msg['data']))#data))
+            print("You've got mail! #of mails: %i" % len(pm.recv_queue['transaction']))
+            msg = pm.recv_queue['transaction'].get()
+            print("One mail from: %s \n There are %i messages left in inbox.\n %s" % (msg['nodeID'], len(pm.recv_queue['transaction']), msg['data']))#data))
             if not test_subject == 'peer4':
                 print("Broadcasting received message...")
                 pm.broadcast(msg['data'],excluded=[msg['nodeID']])

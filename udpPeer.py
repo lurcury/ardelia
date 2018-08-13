@@ -156,5 +156,31 @@ class Peer(gevent.Greenlet):
         if rp[0] == "data":
             self.peermanager.log(self.peerID, 1)
             rp[1]['data'] = json.loads(rp[1]['data'])
-            self.peermanager.recv_queue.put(rp[1])
+            self.parse_data(rp[1])
+            #self.peermanager.recv_queue.put(rp[1])
     
+    def parse_data(self, data):
+        method = data['data']['method']
+        #'status','transaction','new_block','new_block_hash','new_sign_block','get_block','get_block_hash','block','block_hash','sign_block'
+        if method == "status":
+            self.peermanager.recv_queue['status'].put(data)
+        elif method == "transactions":
+            self.peermanager.recv_queue['transaction'].put(data)
+        elif method == "getBlockHashes":
+            self.peermanager.recv_queue['get_block_hash'].put(data)
+        elif method == "blockHashes":
+            self.peermanager.recv_queue['block_hash'].put(data)
+        elif method == "getBlocks":
+            self.peermanager.recv_queue['get_block'].put(data)
+        elif method == "blocks":
+            self.peermanager.recv_queue['block'].put(data)
+        elif method == "newBlockHashes":
+            self.peermanager.recv_queue['new_block_hash'].put(data)
+        elif method == "newBlock":
+            self.peermanager.recv_queue['new_block'].put(data)
+        elif method == "signBlock":
+            self.peermanager.recv_queue['sign_block'].put(data)
+        elif method == "newSignBlock":
+            self.peermanager.recv_queue['new_sign_block'].put(data)
+        else:
+            print("Message not recognized.")
