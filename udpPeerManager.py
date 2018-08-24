@@ -26,6 +26,7 @@ class PeerManager(gevent.Greenlet):
                                    min_peers=1,
                                    max_peers=10,
                                    num_workers=1,
+                                   num_queue=10,
                                    listen_port=30303,
                                    listen_host='0.0.0.0',
                                    timeout = 10.0,           # tbd
@@ -40,15 +41,16 @@ class PeerManager(gevent.Greenlet):
         self.address = (self.configs['p2p']['listen_host'], int(self.configs['p2p']['listen_port']))
         self.peers = []
         self.server = Server(self.address, handle=self._new_conn)
-        self.configs['node']['ID'] = crypto.priv2addr(priv=self.configs['node']['privkey'], wif=self.configs['node']['wif'])
+        #self.configs['node']['ID'] = crypto.priv2addr(priv=self.configs['node']['privkey'], wif=self.configs['node']['wif'])
         self.configs['node']['pubkey'] = crypto.priv2pub(priv=self.configs['node']['privkey'], wif=self.configs['node']['wif'])
         self.state = State.STARTING
         self.status_book = dict()
         # recv_queues for the ten types of messages
-        self.recv_queue = dict()
-        keys = ['status','transaction','new_block','new_block_hash','new_sign_block','get_block','get_block_hash','block','block_hash','sign_block']
-        for key in keys:
-            self.recv_queue[key] = Queue()
+        self.recv_queue = [Queue() for i in range(self.configs['p2p']['num_queue'])]
+        
+        #keys = ['status','transaction','new_block','new_block_hash','new_sign_block','get_block','get_block_hash','block','block_hash','sign_block']
+        #for key in keys:
+        #    self.recv_queue[key] = Queue()
 
     # for server
     def _new_conn(self, data, address):

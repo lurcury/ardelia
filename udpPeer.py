@@ -95,9 +95,11 @@ class Peer(gevent.Greenlet):
     def send_loop(self):
         while not self.is_stopped:
             elapsed = time.time() - self.last_contact
+            
             if elapsed > self.timeout:
                 self.send_disconnect('Ping pong timeout')
             elif elapsed > self.ping_interval and not self.is_pinged:
+                print("time elapsed:", elapsed)
                 self.is_pinged = True
                 self.send_ping()
             else:
@@ -160,8 +162,13 @@ class Peer(gevent.Greenlet):
             #self.peermanager.recv_queue.put(rp[1])
     
     def parse_data(self, data):
-        method = data['data']['method']
+        method = int(data['data']['method'])
         #'status','transaction','new_block','new_block_hash','new_sign_block','get_block','get_block_hash','block','block_hash','sign_block'
+        try:
+            self.peermanager.recv_queue[method].put(data)
+        except IndexError:
+            print ("Illegal method index!")
+        """
         if method == "status":
             self.peermanager.recv_queue['status'].put(data)
         elif method == "transactions":
@@ -184,3 +191,4 @@ class Peer(gevent.Greenlet):
             self.peermanager.recv_queue['new_sign_block'].put(data)
         else:
             print("Message not recognized.")
+        """
