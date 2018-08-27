@@ -51,11 +51,13 @@ class Node:
         self.pm.start()
         for mgr in self.mgrs.values():
             mgr.start()
-        self.run() 
+        self.run()
         try:
             gevent.joinall([self.pm, self.mgrs['stat'], self.mgrs['db'], self.mgrs['consensus']])  
         except KeyboardInterrupt:
             self.stop()
+        
+        #self.run() 
         
     def run(self):
         print("Running!!!!!")
@@ -64,7 +66,8 @@ class Node:
     def test1(self):
         #msg_2 = {"method":"02", "hash" : "Test starting!", "maxBlock": "0"}
         #self.pm.send(msg_2, self.test_peer)
-        msg_10 = {"method":"10", "blocks":{"hash":"testing consensus!"}}
+        print ("sending consensus test to peer...")
+        msg_10 = {"method":"10", "blocks":{"block":"testing consensus!"}}
         self.mgrs['consensus'].publishBlock(msg_10)
 
 
@@ -112,6 +115,7 @@ class dbMgr(gevent.Greenlet):
             self.kill()
 
     def run(self):
+        print("Starting dbMgr...")
         while not self.is_stopped and self.pm.state is State.STARTED:
             # getBlockHash
             if not self.pm.recv_queue[2].empty():
@@ -207,10 +211,11 @@ class dbMgr(gevent.Greenlet):
 
 class consensusMgr(gevent.Greenlet):
     def __init__(self, node):
+        gevent.Greenlet.__init__(self)
         self.pm = node.pm
         #self.db = node.db
         self.key = node.priv_wif
-        self.threshold = 2 # min consensus threshold
+        self.threshold = 1 # min consensus threshold
         self.is_stopped = False
         self.temp = {} # for now, move to db later
     
@@ -220,18 +225,21 @@ class consensusMgr(gevent.Greenlet):
             self.kill()
     
     def run(self):
-        while not self.is_stopped:
+        print("Starting consensusMgr...")
+        while not self.is_stopped and self.pm.state is State.STARTED:
             # Received: General broadcast new proposed block
             if not self.pm.recv_queue[10].empty():
                 message = self.pm.recv_queue[10].get()
                 nodeID = message["nodeID"]
                 blk = message["data"]
+                print("Method: get 10, return 12")
                 print("Block: %s\n" %(blk['blocks']))
                 result = self.signBlock(blk['blocks'])
                 self.pm.send(result, nodeID)
             
             # Received: signed blocks from peers
             if not self.pm.recv_queue[12].empty():
+                print("Method: get 12, return 13")
                 message = self.pm.recv_queue[12].get()
                 self.vote(message)                      
             
@@ -240,23 +248,31 @@ class consensusMgr(gevent.Greenlet):
                 message = self.pm.recv_queue[13].get()
                 # add consensus to end of chain
                 consensus = message["data"]["blocks"]
+                print("Method: get 13, consensus sealed.")
                 print("Consensus block: %s" %consensus)
                 
             gevent.sleep()
     
     def publishBlock(self, block):
-        self.temp[block] = {"voters":list(), "agreed":False}
+        key = block['blocks']['block']
+        self.temp[key] = {"voters":list(), "agreed":False}
         self.pm.broadcast(block)
 
     def vote(self, message):
         nodeID = message["nodeID"]
         block = message["data"]["blocks"]["block"]    # verify signature later
         try:
-            if nodeID not in self.temp[block]["voters"]:
-                self.temp[block]["voters"].append(nodeID)
-                if len(self.temp[block]["voters"]) > self.threshold:
-                    consensus = {"method":"13", "blocks":{"block":block}}
-                    self.pm.broadcast(consensus)
+            if self.temp[block]:
+                try:
+                    if nodeID not in self.temp[block]["voters"] and not self.temp[block]['agreed']:
+                        self.temp[block]["voters"].append(nodeID)
+                        if len(self.temp[block]["voters"]) >= self.threshold:
+                            print("Consensus reached, broadcasting block...")
+                            self.temp[block]['agreed'] = True
+                            consensus = {"method":"13", "blocks":{"block":block}}
+                            self.pm.broadcast(consensus)
+                except KeyError:
+                    print("NodeID not from peer!")
         except KeyError:
             print("Block not proposed by this node!")
     
