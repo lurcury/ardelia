@@ -52,6 +52,7 @@ config = {
         'min_peers':1,
         'max_peers':10,
         'num_workers':3,
+        'num_queue':10,
         'listen_port':'',
         'listen_host':'127.0.0.1',
         'timeout':15.0,
@@ -79,24 +80,28 @@ def main(argv):
     if test_subject == 'peer1':
         print ("%s, pubID: %s" %(test_subject, pb1))
         config['node']['wif'] = '5JdFN2jJvC9bCuN4F9i93RkDqBDBqcyinpzBRmnW8xXiXsnGmHT'
+        config['node']['ID'] = pb1
         config['p2p']['listen_port'] = '10000'
         config['p2p']['bootstrap_nodes'] = []
 
     elif test_subject == 'peer2':
         print ("%s, pubID: %s" %(test_subject, pb2))
         config['node']['wif'] = '5HueCGU8rMjxEXxiPuD5BDku4MkFqeZyd4dZ1jvhTVqvbTLvyTJ'
+        config['node']['ID'] = pb2
         config['p2p']['listen_port'] = '15000'
         config['p2p']['bootstrap_nodes'] = [peer1]
            
     elif test_subject == 'peer3':
         print ("%s, pubID: %s" %(test_subject, pb3))
         config['node']['wif'] = '5KHSJUf7C6tnTQHwTKxuMKi9ifEeMdMs5XrGBJMU92yebTqyjMZ'
+        config['node']['ID'] = pb3
         config['p2p']['listen_port'] = '20000'
         config['p2p']['bootstrap_nodes'] = [peer1,peer2]
 
     elif test_subject == 'peer4':
         print ("%s, pubID: %s" %(test_subject, pb4))
         config['node']['wif'] = '5JHj8HdUMeDv8nWZazrraWsz9a1jWu7g6UgLCye1vZV9QJ8hprs'
+        config['node']['ID'] = pb4
         config['p2p']['listen_port'] = '25000'
         config['p2p']['bootstrap_nodes'] = [peer1,peer2,peer3]
         
@@ -121,28 +126,28 @@ def run_pm_loop(pm, test_subject):
     # Test: 4 peers broadcasting and receiving
     if test_subject == 'peer1':
         gevent.sleep(2)
-        packet = transaction1
+        packet = {"method":"02","transaction":[transaction1]}
         pm.send(packet,pb2)   
     if test_subject == 'peer2':
         gevent.sleep(1.2)
-        packet = transaction2
+        packet = {"method":"02","transaction":[transaction2]}
         pm.send(packet,pb3) 
     if test_subject == 'peer3':
         gevent.sleep(0.6)
-        packet = transaction3
+        packet = {"method":"02","transaction":[transaction3]}
         pm.send(packet,pb4) 
     if test_subject == 'peer4':
-        packet = transaction4
+        packet = {"method":"02","transaction":[transaction4]}
         pm.send(packet,pb1) 
     start_time = time.time()
     count = 0
     print("running! time: %f" %start_time)
     while pm.state is State.STARTED:
-        if not pm.recv_queue['transaction'].empty():
+        if not pm.recv_queue[2].empty():
             count = count+1
-            print("You've got mail! #of mails: %i" % len(pm.recv_queue['transaction']))
-            msg = pm.recv_queue['transaction'].get()
-            print("One mail from: %s \n There are %i messages left in inbox.\n %s" % (msg['nodeID'], len(pm.recv_queue['transaction']), msg['data']))#data))
+            print("You've got mail! #of mails: %i" % len(pm.recv_queue[2]))
+            msg = pm.recv_queue[2].get()
+            print("One mail from: %s \n There are %i messages left in inbox.\n %s" % (msg['nodeID'], len(pm.recv_queue[2]), msg['data']))#data))
             if not test_subject == 'peer4':
                 print("Broadcasting received message...")
                 pm.broadcast(msg['data'],excluded=[msg['nodeID']])

@@ -27,7 +27,7 @@ class Peer(gevent.Greenlet):
             print('Socket creation error: %s' % e.strerror)
         
         self.myID = peermanager.configs['node']['ID']
-        self.myAddr = (self.peermanager.configs['p2p']['listen_host'],self.socket.getsockname()[1])
+        self.myAddr = (self.peermanager.configs['p2p']['listen_host'], self.socket.getsockname()[1])
         self.handler = Protocol(self,self.peermanager.configs['node']['wif'],self.peermanager.configs['node']['pubkey'],self.peermanager.configs['p2p']['num_workers'])
         self.handler.start()
         self.greenlets = dict()

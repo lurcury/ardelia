@@ -99,6 +99,7 @@ class PeerManager(gevent.Greenlet):
             peer.send_hello()
             return True
         else:
+            print("Reason: %s" % disagree)
             return False
 
     def broadcast(self, packet, num_peers=None, excluded=[]):
@@ -158,6 +159,7 @@ class PeerManager(gevent.Greenlet):
 
     def create_peer(self, node_info):
         peer = Peer(self, node_info)
+        print("Peer created.")
         peer.link(peer_die)
         peer.start()
         self.peers.append(peer)
