@@ -77,7 +77,7 @@ class Peer(gevent.Greenlet):
                     raise e 
             
             try:
-                message, addr = self.socket.recvfrom(4096)
+                message, addr = self.socket.recvfrom(8192)
                 self.peerAddr = addr
             except gevent.socket.error as e:
                 print('Network error: %s' %e.strerror)
@@ -95,7 +95,6 @@ class Peer(gevent.Greenlet):
     def send_loop(self):
         while not self.is_stopped:
             elapsed = time.time() - self.last_contact
-            
             if elapsed > self.timeout:
                 self.send_disconnect('Ping pong timeout')
             elif elapsed > self.ping_interval and not self.is_pinged:
@@ -118,7 +117,7 @@ class Peer(gevent.Greenlet):
             print("Missing packet!")
             return
         self.read_ready.clear()
-        # use socket.wait_write() ??
+
         try:
             self.socket.sendto(packet, self.peerAddr)
         except gevent.socket.error as e:
@@ -163,32 +162,7 @@ class Peer(gevent.Greenlet):
     
     def parse_data(self, data):
         method = int(data['data']['method'])
-        #'status','transaction','new_block','new_block_hash','new_sign_block','get_block','get_block_hash','block','block_hash','sign_block'
         try:
             self.peermanager.recv_queue[method].put(data)
         except IndexError:
             print ("Illegal method index!")
-        """
-        if method == "status":
-            self.peermanager.recv_queue['status'].put(data)
-        elif method == "transactions":
-            self.peermanager.recv_queue['transaction'].put(data)
-        elif method == "getBlockHashes":
-            self.peermanager.recv_queue['get_block_hash'].put(data)
-        elif method == "blockHashes":
-            self.peermanager.recv_queue['block_hash'].put(data)
-        elif method == "getBlocks":
-            self.peermanager.recv_queue['get_block'].put(data)
-        elif method == "blocks":
-            self.peermanager.recv_queue['block'].put(data)
-        elif method == "newBlockHashes":
-            self.peermanager.recv_queue['new_block_hash'].put(data)
-        elif method == "newBlock":
-            self.peermanager.recv_queue['new_block'].put(data)
-        elif method == "signBlock":
-            self.peermanager.recv_queue['sign_block'].put(data)
-        elif method == "newSignBlock":
-            self.peermanager.recv_queue['new_sign_block'].put(data)
-        else:
-            print("Message not recognized.")
-        """
